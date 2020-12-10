@@ -1,0 +1,19 @@
+{
+  "name": "pocket2retweet",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basd4g/pocket2retweet.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/basd4g/pocket2retweet/issues"
+  },
+  "homepage": "https://github.com/basd4g/pocket2retweet#readme"
+}
