@@ -1,5 +1,13 @@
 `use strict`
 
+function log(str) {
+  const line = {
+    date: new Date().toISOString(),
+    message: str
+  }
+  console.log(JSON.stringify(line));
+}
+
 const config = require('./.env.json');
 
 const Twitter = require('twitter');
@@ -23,7 +31,7 @@ async function fetchAndUpdateLastRun() {
   const lastRunUnixSeconds = await fs.readFile(filename).then(s=>''+s).catch(() => 0);
   const now = '' + Math.floor(new Date().getTime()/ 1000);
   await fs.writeFile(filename, now);
-  console.log(`Update 'lastrun' from ${lastRunUnixSeconds} to ${now}`);
+  log(`Update 'lastrun' from ${lastRunUnixSeconds} to ${now}`);
   return lastRunUnixSeconds;
 }
 
@@ -80,10 +88,10 @@ const deletePocketItems = item_ids => new Promise((fullfill, reject) => { // [bo
 const retweetOrUndefined = item => {
   const tweetId = item.url.split("/").pop();
   return retweet(tweetId).then( () => {
-    console.log(`Retweeted: ${tweetId}`);
+    log(`Retweeted: ${tweetId}`);
     return item;
   }).catch(e => {
-    console.log(`Failed to retweet: ${tweetId}, error: ${e}`);
+    log(`Failed to retweet: ${tweetId}, error: ${e}`);
     return undefined;
   });
 };
@@ -91,10 +99,10 @@ const retweetOrUndefined = item => {
 const followOrUndefined = item => {
   const userId = item.url.split("/").pop();
   return follow(userId).then(() => {
-    console.log(`Followed: ${userId}`);
+    log(`Followed: ${userId}`);
     return item;
   }).catch(e => {
-    console.log(`Failed to follow: ${userId}, error: ${e}`);
+    log(`Failed to follow: ${userId}, error: ${e}`);
     return undefined;
   });
 };
@@ -111,7 +119,7 @@ async function main() {
   const pocketIdsWillDelete = itemsOrUndefineds.filter(i => i).map(i => i.pocket_id);
 
   const results = await deletePocketItems(pocketIdsWillDelete);
-  results.forEach((isSuccess, i) => console.log((isSuccess ? "Deleted" : "Failed to delete") + " Pocket item: " + pocketIdsWillDelete[i]));
+  results.forEach((isSuccess, i) => log((isSuccess ? "Deleted" : "Failed to delete") + " Pocket item: " + pocketIdsWillDelete[i]));
 }
 
 main().catch(e => console.error(e));
