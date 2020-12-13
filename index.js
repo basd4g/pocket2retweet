@@ -109,11 +109,18 @@ const followOrUndefined = item => {
 
 async function main() {
   const lastRunUnixSeconds = await fetchAndUpdateLastRun();
-  const items = await getPocketItems('' + lastRunUnixSeconds);
+  const items = await getPocketItems('' + lastRunUnixSeconds).catch(e => {
+    log("getPocketItems is failed., may not found tweets or Twitter users");
+    return [];
+  });
   await fs.writeFile('dump.json', JSON.stringify(items));
 
   const userItems = items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+$/.test(i.url));
   const tweetItems = items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+$/.test(i.url));
+
+  if (userItems.length === 0 && tweetItems.length === 0) {
+    return;
+  }
 
   const itemsOrUndefineds = await Promise.all([...userItems.map(followOrUndefined), ...tweetItems.map(retweetOrUndefined)]);
   const pocketIdsWillDelete = itemsOrUndefineds.filter(i => i).map(i => i.pocket_id);
