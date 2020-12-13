@@ -18,7 +18,6 @@
   "homepage": "https://github.com/basd4g/pocket2retweet#readme",
   "dependencies": {
     "node-getpocket": "^1.0.0",
-    "rss-parser": "^3.9.0",
     "twitter": "^1.7.1"
   }
 }

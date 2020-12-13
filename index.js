@@ -2,9 +2,6 @@
 
 const config = require('./.env.json');
 
-const RssParser = require('rss-parser');
-const rssParser = new RssParser();
-
 const Twitter = require('twitter');
 const twitter = new Twitter({
   consumer_key: config.twitter_consumer_key,
@@ -18,6 +15,17 @@ const pocket = new GetPocket({
   consumer_key: config.pocket_consumer_key,
   access_token: config.pocket_access_token,
 });
+
+const fs = require('fs').promises;
+
+async function fetchAndUpdateLastRun() {
+  const filename = './lastrun'
+  const lastRunUnixSeconds = await fs.readFile(filename).then(s=>''+s).catch(() => 0);
+  const now = '' + Math.floor(new Date().getTime()/ 1000);
+  await fs.writeFile(filename, now);
+  console.log(`Update 'lastrun' from ${lastRunUnixSeconds} to ${now}`);
+  return lastRunUnixSeconds;
+}
 
 const retweet = (tweetId) => new Promise((fulfill, reject) => {
   twitter.post('statuses/retweet/' + tweetId, (error, tweet, response) => {
@@ -39,77 +47,71 @@ const follow = (userId) => new Promise((fullfill, reject) => {
   });
 });
 
-const retweetAndIsSuccess = pocketItem => {
-  const tweetId = pocketItem.url.split("/").pop();
-  return retweet(tweetId).then( () => {
-    console.log(`Retweeted: ${tweetId}`);
-    return { pocketItem, isSuccess: true };
-  }).catch(e => {
-    console.log(`Failed to retweet: ${tweetId}, error: ${e}`);
-    return { pocketItem, isSuccess: false };
-  });
-};
-
-const followAndIsSuccess = pocketItem => {
-  const userId = pocketItem.url.split("/").pop();
-  return follow(userId).then(() => {
-    console.log(`Followed: ${userId}`);
-    return { pocketItem, isSuccess: true };
-  }).catch(e => {
-    console.log(`Failed to follow: ${userId}, error: ${e}`);
-    return { pocketItem, isSuccess: false };
-  });
-};
-
-
-const getPocketItem = url => new Promise((fullfill, reject) => {
+const getPocketItems = since => new Promise((fullfill, reject) => { // [{pocket_id, url}]
   pocket.get({
-    search: url
+    since,
+    state: 'all',
+    search: 'https://twitter.com',
   }, (err, res) => {
     if (err) {
       reject(err);
       return;
     }
-    const keys = Object.keys(res.list);
-    if (keys?.length != 1) {
-      reject(new Error("Object.keys(res.list).length is " + keys));
-      return;
-    }
-    fullfill(res.list[keys[0]].item_id);
+    const items = Object.keys(res.list).map(key => ({ pocket_id: '' + res.list[key].item_id, url: res.list[key].resolved_url }));
+    fullfill(items);
   });
 });
 
-const deletePocketItem = item_id => new Promise((fullfill, reject) => {
-  pocket.send({actions:[{ action: "delete", item_id: `${item_id}` }]}, (err, res) => {
+const deletePocketItems = item_ids => new Promise((fullfill, reject) => { // [bool]
+  const actions = item_ids.map(item_id => ({action: "delete", item_id}));
+  pocket.send({actions}, (err, res) => {
     if (err) {
       reject(err);
       return;
     }
-    if (res?.action_results?.length != 1) {
-      reject(new Error("res?.results?.length is " + res?.results?.length +", wants 1"));
+    if (res?.action_results === undefined) {
+      reject(new Error("res?.action_results is undefined"));
       return;
     }
-    fullfill(res.action_results[0]);
+    fullfill(res.action_results);
   });
 });
 
+const retweetOrUndefined = item => {
+  const tweetId = item.url.split("/").pop();
+  return retweet(tweetId).then( () => {
+    console.log(`Retweeted: ${tweetId}`);
+    return item;
+  }).catch(e => {
+    console.log(`Failed to retweet: ${tweetId}, error: ${e}`);
+    return undefined;
+  });
+};
+
+const followOrUndefined = item => {
+  const userId = item.url.split("/").pop();
+  return follow(userId).then(() => {
+    console.log(`Followed: ${userId}`);
+    return item;
+  }).catch(e => {
+    console.log(`Failed to follow: ${userId}, error: ${e}`);
+    return undefined;
+  });
+};
+
 async function main() {
-  const feed = await rssParser.parseURL(config.pocket_feed_url);
-  // TODO: fetch with pocket API, and memo fetched date if all task is successd.
-  const userUrls = feed.items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+$/.test(i.link)).map(u => u.link);
-  const tweetUrls = feed.items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+$/.test(i.link)).map(t => t.link);
+  const lastRunUnixSeconds = await fetchAndUpdateLastRun();
+  const items = await getPocketItems('' + lastRunUnixSeconds);
+  await fs.writeFile('dump.json', JSON.stringify(items));
 
-  const userPocketItems = userUrls.map(url => ({ url }));
-  const tweetPocketItems = tweetUrls.map(url => ({ url }));
+  const userItems = items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+$/.test(i.url));
+  const tweetItems = items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+$/.test(i.url));
 
-  const urlAndIsSuccesses = await Promise.all([...userPocketItems.map(followAndIsSuccess), ...tweetPocketItems.map(retweetAndIsSuccess)]);
-  const pocketItemsWillDelete = urlAndIsSuccesses.filter(t => t.isSuccess).map(t => t.pocketItem);
+  const itemsOrUndefineds = await Promise.all([...userItems.map(followOrUndefined), ...tweetItems.map(retweetOrUndefined)]);
+  const pocketIdsWillDelete = itemsOrUndefineds.filter(i => i).map(i => i.pocket_id);
 
-  await Promise.all(pocketItemsWillDelete.map(async pocketItem => {
-    pocketItem.id = await getPocketItem(pocketItem.url);
-    await deletePocketItem(pocketItem.id);
-    console.log(`Deleted item from Pocket: ${pocketItem.url}`);
-  }));
+  const results = await deletePocketItems(pocketIdsWillDelete);
+  results.forEach((isSuccess, i) => console.log((isSuccess ? "Deleted" : "Failed to delete") + " Pocket item: " + pocketIdsWillDelete[i]));
 }
 
 main().catch(e => console.error(e));
