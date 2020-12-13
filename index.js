@@ -39,8 +39,28 @@ const follow = (userId) => new Promise((fullfill, reject) => {
   });
 });
 
-const url2tweetId = url => url.split("/").pop();
-const url2userId = url => url.split("/").pop();
+const retweetAndIsSuccess = pocketItem => {
+  const tweetId = pocketItem.url.split("/").pop();
+  return retweet(tweetId).then( () => {
+    console.log(`Retweeted: ${tweetId}`);
+    return { pocketItem, isSuccess: true };
+  }).catch(e => {
+    console.log(`Failed to retweet: ${tweetId}, error: ${e}`);
+    return { pocketItem, isSuccess: false };
+  });
+};
+
+const followAndIsSuccess = pocketItem => {
+  const userId = pocketItem.url.split("/").pop();
+  return follow(userId).then(() => {
+    console.log(`Followed: ${userId}`);
+    return { pocketItem, isSuccess: true };
+  }).catch(e => {
+    console.log(`Failed to follow: ${userId}, error: ${e}`);
+    return { pocketItem, isSuccess: false };
+  });
+};
+
 
 const getPocketItem = url => new Promise((fullfill, reject) => {
   pocket.get({
@@ -76,29 +96,20 @@ const deletePocketItem = item_id => new Promise((fullfill, reject) => {
 async function main() {
   const feed = await rssParser.parseURL(config.pocket_feed_url);
   // TODO: fetch with pocket API, and memo fetched date if all task is successd.
+  const userUrls = feed.items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+$/.test(i.link)).map(u => u.link);
+  const tweetUrls = feed.items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+$/.test(i.link)).map(t => t.link);
 
-  const users = feed.items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+$/.test(i.link));
-  const tweets = feed.items.filter(i => /^https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+$/.test(i.link));
+  const userPocketItems = userUrls.map(url => ({ url }));
+  const tweetPocketItems = tweetUrls.map(url => ({ url }));
 
-  const userUrls = users.map(u => u.link);
-  const tweetUrls = tweets.map(t => t.link);
+  const urlAndIsSuccesses = await Promise.all([...userPocketItems.map(followAndIsSuccess), ...tweetPocketItems.map(retweetAndIsSuccess)]);
+  const pocketItemsWillDelete = urlAndIsSuccesses.filter(t => t.isSuccess).map(t => t.pocketItem);
 
-  const retweetPromises = tweetUrls.map(async url => {
-    await retweet(url2tweetId(url));
-    const id = await getPocketItem(url);
-    await deletePocketItem(id);
-    console.log(`Retweeted to Twitter and deleted from Pocket: ${url}`);
-  });
-
-  const followPromises = userUrls.map(async url => {
-    await follow(url2userId(url));
-    const id = await getPocketItem(url);
-    await deletePocketItem(id);
-    console.log(`Followed with Twitter and deleted from Pocket: ${url}`);
-  });
-
-  await Promise.all([...retweetPromises, ...followPromises]);
-
+  await Promise.all(pocketItemsWillDelete.map(async pocketItem => {
+    pocketItem.id = await getPocketItem(pocketItem.url);
+    await deletePocketItem(pocketItem.id);
+    console.log(`Deleted item from Pocket: ${pocketItem.url}`);
+  }));
 }
 
 main().catch(e => console.error(e));
