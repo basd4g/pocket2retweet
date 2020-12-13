@@ -22,14 +22,10 @@ npm i
   "twitter_consumer_secret": "xxxxxxxxxxx",                         // you can get on twitter developper web page
   "twitter_access_token_key": "xxxxxxxxxxx",                        // you can get on twitter developper web page
   "twitter_access_token_secret": "xxxxxxxxxxx",                     // you can get on twitter developper web page
-  "pocket_feed_url": "http://getpocket.com/users/xxxxxx/feed/all",  // you can get on pocket settings web page
   "pocket_consumer_key": "xxxxxxxxxxx",                             // you can get on pocket developper web page
   "pocket_access_token": "xxxxxxxxxxx"
 }
 ```
-
-Please be public your RSS feed of Pocket.
-
 
 ### Pocket access token
 
