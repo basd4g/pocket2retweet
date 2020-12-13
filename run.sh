@@ -1,3 +1,3 @@
 #!/bin/bash -e
 cd "$(dirname "$0")"
-npm start
+/usr/local/bin/node index.js
