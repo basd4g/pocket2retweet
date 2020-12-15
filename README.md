@@ -1,8 +1,9 @@
 # Pocket2Retweet
 
-Retweet to [Twitter](https://twitter.com) from stocked tweets in [Pocket](https://getpocket.com/).
+Retweet to [Twitter](https://twitter.com) from stocked tweets in [Pocket](https://getpocket.com/),
+and follow Twitter users that stocked in Pocket.
 
-Need Twitter API key.
+Need API keys of Twitter Pocket.
 
 ## Setup
 
